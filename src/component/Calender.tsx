@@ -1,17 +1,12 @@
 import {
   differenceInCalendarDays,
-  eachDayOfInterval,
-  endOfMonth,
-  endOfWeek,
   format,
   isBefore,
   isSameDay,
   parseISO,
   startOfDay,
-  startOfMonth,
-  startOfWeek,
 } from "date-fns";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React from "react";
 import { COLORS, type Category, type Task } from "../types/EventType";
 
 interface ICalenderProps {
@@ -19,137 +14,36 @@ interface ICalenderProps {
   filteredTasks: Task[];
   setTaskCategory: React.Dispatch<React.SetStateAction<Category>>;
   setTaskName: React.Dispatch<React.SetStateAction<string>>;
-  setCreateModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  setNewTaskRange: React.Dispatch<
-    React.SetStateAction<{ start: string; end: string } | null>
-  >;
   setEditingTask: React.Dispatch<React.SetStateAction<Task | null>>;
-  tasks: Task[];
   viewMonth: Date;
-}
-const Calendar: React.FC<ICalenderProps> = ({
-  weeks,
-  filteredTasks,
-  setTaskCategory,
-  setTaskName,
-  setCreateModalOpen,
-  setNewTaskRange,
-  setEditingTask,
-  tasks,
-  viewMonth,
-}) => {
-  const today = new Date();
-  const todayStart = startOfDay(new Date());
-  const iso = (d: Date) => d.toISOString().slice(0, 10);
-
-  const monthStart = startOfMonth(viewMonth);
-  const monthEnd = endOfMonth(viewMonth);
-  const gridStart = startOfWeek(monthStart, { weekStartsOn: 0 });
-  const gridEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });
-  const days = useMemo(
-    () => eachDayOfInterval({ start: gridStart, end: gridEnd }),
-    [viewMonth]
-  );
-
-  const dateIndex = (dIso: string) => {
-    const idx = days.findIndex((d) => iso(d) === dIso);
-    return idx;
-  };
-  const [selecting, setSelecting] = useState<{
-    startIndex: number;
-    endIndex: number;
-  } | null>(null);
-  const [isMouseDown, setIsMouseDown] = useState(false);
-
-  function onTileMouseDown(idx: number) {
-    setIsMouseDown(true);
-    setSelecting({ startIndex: idx, endIndex: idx });
-  }
-  function onTileMouseEnter(idx: number) {
-    if (!isMouseDown || !selecting) return;
-    setSelecting({ ...selecting, endIndex: idx });
-  }
-  function onGlobalMouseUp() {
-    if (isMouseDown && selecting) {
-      openCreateModalForIndices(selecting.startIndex, selecting.endIndex);
-    }
-    setSelecting(null);
-    setIsMouseDown(false);
-  }
-
-  useEffect(() => {
-    window.addEventListener("mouseup", onGlobalMouseUp);
-    return () => window.removeEventListener("mouseup", onGlobalMouseUp);
-  }, [isMouseDown, selecting]);
-  function openCreateModalForIndices(a: number, b: number) {
-    const [s, e] = a <= b ? [a, b] : [b, a];
-    const start = iso(days[s]);
-    const end = iso(days[e]);
-    setNewTaskRange({ start, end });
-    setTaskName("");
-    setTaskCategory("To Do");
-    setCreateModalOpen(true);
-  }
-  const dragState = useRef<{
-    mode: null | "move" | "resize-left" | "resize-right";
-    taskId?: string;
-    initialMouseIndex?: number;
-    initialTaskStart?: string;
-    initialTaskEnd?: string;
-  }>({ mode: null });
-
-  function onTaskMouseDown(
+  onTileMouseDown: Function;
+  onTileMouseEnter: Function;
+  onTaskMouseDown: (
     e: React.MouseEvent,
     taskId: string,
     mode: "move" | "resize-left" | "resize-right"
-  ) {
-    e.stopPropagation();
-    (e.nativeEvent as any).preventDefault?.();
-    const task = tasks.find((t) => t.id === taskId);
-    if (!task) return;
-    dragState.current = {
-      mode,
-      taskId,
-      initialMouseIndex: mousePosToDayIndex(
-        (e as any).clientX,
-        (e as any).clientY
-      ),
-      initialTaskStart: task.start,
-      initialTaskEnd: task.end,
-    };
-  }
-  function mousePosToDayIndex(clientX: number, clientY: number) {
-    if (typeof document === "undefined") return 0;
-    const els = (document as any).elementsFromPoint
-      ? (document as any).elementsFromPoint(clientX, clientY)
-      : [document.elementFromPoint(clientX, clientY)];
-    for (const el of els) {
-      if (!(el instanceof HTMLElement)) continue;
-      const dayEl = el.closest("[data-day-index]") as HTMLElement | null;
-      if (dayEl && dayEl.dataset.dayIndex !== undefined) {
-        return Number(dayEl.dataset.dayIndex);
-      }
-    }
+  ) => void;
 
-    // fallback: compute using calendar grid bounding rect
-    const grid = document.querySelector(
-      "[data-month-grid]"
-    ) as HTMLElement | null;
-    if (grid) {
-      const rect = grid.getBoundingClientRect();
-      const cols = 7;
-      const rows = Math.ceil(days.length / cols);
-      const colWidth = rect.width / cols;
-      const rowHeight = rect.height / rows;
-      const col = Math.floor((clientX - rect.left) / colWidth);
-      const row = Math.floor((clientY - rect.top) / rowHeight);
-      if (col >= 0 && col < cols && row >= 0 && row < rows) {
-        return row * cols + col;
-      }
-    }
+  dateIndex: (date: string) => number;
+  selecting: { startIndex: number; endIndex: number } | null;
+}
 
-    return 0;
-  }
+const Calendar: React.FC<ICalenderProps> = ({
+  weeks,
+   filteredTasks,
+   setTaskCategory,
+   setTaskName,
+   setEditingTask,
+  viewMonth,
+   onTileMouseDown,
+   onTaskMouseDown,
+   dateIndex,
+   onTileMouseEnter,
+   selecting,
+}) => {
+  const today = new Date();
+  const todayStart = startOfDay(new Date());
+
   return (
     <div
       className="grid grid-cols-7 gap-1 border rounded overflow-hidden select-none"
@@ -207,9 +101,7 @@ const Calendar: React.FC<ICalenderProps> = ({
                       <div>
                         {format(day, "d")}{" "}
                         {isToday && (
-                          <div className="font-bold  text-zinc-500">
-                            Today
-                          </div>
+                          <div className="font-bold  text-zinc-500">Today</div>
                         )}{" "}
                       </div>
                     </div>

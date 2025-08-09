@@ -1,26 +1,34 @@
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  format,
+  startOfMonth,
+  endOfMonth,
+  eachDayOfInterval,
   addDays,
   differenceInCalendarDays,
-  eachDayOfInterval,
-  endOfMonth,
+  startOfWeek,
   endOfWeek,
-  format,
-  isBefore,
-  isSameDay,
   isWithinInterval,
   parseISO,
+  isSameDay,
+  isBefore,
   startOfDay,
-  startOfMonth,
-  startOfWeek,
 } from "date-fns";
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { Category, Task } from "../types/EventType";
-import Calendar from "./Calender";
 import Modal from "./Modal";
-import SearchBar from "./searchbar";
 import TaskList from "./taskList";
+import Calendar from "./Calender";
 
 // Simple types
+type Category = "To Do" | "In Progress" | "Review" | "Completed" | "Overdue";
+
+type Task = {
+  id: string;
+  name: string;
+  category: Category;
+  start: string; // ISO date
+  end: string; // ISO date (inclusive)
+  color?: string;
+};
 
 // Helper utilities
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -108,6 +116,14 @@ export default function MonthPlanner() {
     setCreateModalOpen(true);
   }
 
+  function onTileMouseDown(idx: number) {
+    setIsMouseDown(true);
+    setSelecting({ startIndex: idx, endIndex: idx });
+  }
+  function onTileMouseEnter(idx: number) {
+    if (!isMouseDown || !selecting) return;
+    setSelecting({ ...selecting, endIndex: idx });
+  }
   function onGlobalMouseUp() {
     if (isMouseDown && selecting) {
       openCreateModalForIndices(selecting.startIndex, selecting.endIndex);
@@ -136,7 +152,12 @@ export default function MonthPlanner() {
     setNewTaskRange(null);
   }
 
-  //  elementsFromPoint to find underlying day tile;
+  const dateIndex = (dIso: string) => {
+    const idx = days.findIndex((d) => iso(d) === dIso);
+    return idx;
+  };
+
+  // Improved: use elementsFromPoint to find underlying day tile; fallback to geometry calculation
   function mousePosToDayIndex(clientX: number, clientY: number) {
     if (typeof document === "undefined") return 0;
     const els = (document as any).elementsFromPoint
@@ -168,6 +189,27 @@ export default function MonthPlanner() {
     }
 
     return 0;
+  }
+
+  function onTaskMouseDown(
+    e: React.MouseEvent,
+    taskId: string,
+    mode: "move" | "resize-left" | "resize-right"
+  ) {
+    e.stopPropagation();
+    (e.nativeEvent as any).preventDefault?.();
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+    dragState.current = {
+      mode,
+      taskId,
+      initialMouseIndex: mousePosToDayIndex(
+        (e as any).clientX,
+        (e as any).clientY
+      ),
+      initialTaskStart: task.start,
+      initialTaskEnd: task.end,
+    };
   }
 
   function onGlobalMouseMove(e: MouseEvent) {
@@ -229,6 +271,7 @@ export default function MonthPlanner() {
       window.removeEventListener("mousemove", onGlobalMouseMove);
       window.removeEventListener("mouseup", onGlobalMouseUpDrag);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filteredTasks = tasks.filter((t) => {
@@ -283,25 +326,67 @@ export default function MonthPlanner() {
         </div>
       </div>
       {/* Controls */}
-      <SearchBar
-        setSearchQuery={setSearchQuery}
-        searchQuery={searchQuery}
-        setTimeFilter={setTimeFilter}
-        timeFilter={timeFilter}
-        setCategoryFilters={setCategoryFilters}
-        categoryFilters={categoryFilters}
-      />
-      {/* Calendar grid*/}
+      <div className="mb-4 flex gap-4 items-center">
+        <input
+          className="border px-2 py-1 rounded w-64"
+          placeholder="Search tasks..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+
+        <div className="flex gap-2 items-center">
+          {(
+            [
+              "To Do",
+              "In Progress",
+              "Review",
+              "Completed",
+              "Overdue",
+            ] as Category[]
+          ).map((cat) => (
+            <label key={cat} className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={categoryFilters[cat]}
+                onChange={(e) =>
+                  setCategoryFilters((s) => ({
+                    ...s,
+                    [cat]: e.target.checked,
+                  }))
+                }
+              />
+              <span className="text-sm">{cat}</span>
+            </label>
+          ))}
+        </div>
+
+        <div className="flex gap-1 items-center">
+          <label className="text-sm">Time:</label>
+          <select
+            value={timeFilter}
+            onChange={(e) => setTimeFilter(Number(e.target.value) as any)}
+            className="border rounded px-2 py-1 text-sm"
+          >
+            <option value={0}>All</option>
+            <option value={7}>1 week</option>
+            <option value={14}>2 weeks</option>
+            <option value={21}>3 weeks</option>
+          </select>
+        </div>
+      </div>
+      {/* Calendar grid - add data-month-grid so fallback geometry can find it */}
       <Calendar
         filteredTasks={filteredTasks}
-        setCreateModalOpen={setCreateModalOpen}
-        setNewTaskRange={setNewTaskRange}
         setTaskCategory={setTaskCategory}
         setTaskName={setTaskName}
-        setEditingTask={setEditingTask}
         weeks={weeks}
-        tasks={tasks}
+        setEditingTask={setEditingTask}
         viewMonth={viewMonth}
+        onTaskMouseDown={onTaskMouseDown}
+        onTileMouseDown={onTileMouseDown}
+        onTileMouseEnter={onTileMouseEnter}
+        dateIndex={dateIndex}
+        selecting={selecting}
       />
 
       {/* modal */}
