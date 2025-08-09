@@ -17,6 +17,7 @@ import {
 import Modal from "./Modal";
 import TaskList from "./taskList";
 import Calendar from "./Calender";
+import SearchBar from "./searchbar";
 
 // Simple types
 type Category = "To Do" | "In Progress" | "Review" | "Completed" | "Overdue";
@@ -326,55 +327,15 @@ export default function MonthPlanner() {
         </div>
       </div>
       {/* Controls */}
-      <div className="mb-4 flex gap-4 items-center">
-        <input
-          className="border px-2 py-1 rounded w-64"
-          placeholder="Search tasks..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
-
-        <div className="flex gap-2 items-center">
-          {(
-            [
-              "To Do",
-              "In Progress",
-              "Review",
-              "Completed",
-              "Overdue",
-            ] as Category[]
-          ).map((cat) => (
-            <label key={cat} className="flex items-center gap-1">
-              <input
-                type="checkbox"
-                checked={categoryFilters[cat]}
-                onChange={(e) =>
-                  setCategoryFilters((s) => ({
-                    ...s,
-                    [cat]: e.target.checked,
-                  }))
-                }
-              />
-              <span className="text-sm">{cat}</span>
-            </label>
-          ))}
-        </div>
-
-        <div className="flex gap-1 items-center">
-          <label className="text-sm">Time:</label>
-          <select
-            value={timeFilter}
-            onChange={(e) => setTimeFilter(Number(e.target.value) as any)}
-            className="border rounded px-2 py-1 text-sm"
-          >
-            <option value={0}>All</option>
-            <option value={7}>1 week</option>
-            <option value={14}>2 weeks</option>
-            <option value={21}>3 weeks</option>
-          </select>
-        </div>
-      </div>
-      {/* Calendar grid - add data-month-grid so fallback geometry can find it */}
+      <SearchBar
+        setSearchQuery={setSearchQuery}
+        searchQuery={searchQuery}
+        setTimeFilter={setTimeFilter}
+        timeFilter={timeFilter}
+        setCategoryFilters={setCategoryFilters}
+        categoryFilters={categoryFilters}
+      />
+      {/* Calendar grid*/}
       <Calendar
         filteredTasks={filteredTasks}
         setTaskCategory={setTaskCategory}
@@ -411,10 +372,7 @@ export default function MonthPlanner() {
 
       <TaskList tasks={filteredTasks} setTasks={setTasks} />
 
-      <div className="mt-6 text-sm text-gray-500">
-        Tip: Click and drag across days to create a task. Click a task and drag
-        to move. Drag the left/right edges to resize.
-      </div>
+
     </div>
   );
 }
